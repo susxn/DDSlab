@@ -1,0 +1,226 @@
+---
+title: "Práctica Final Data Driven Security"
+author: "Ismael Shaban Y Antonio Cruz"
+date: "13 de enero de 2019"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+    toc_float: no
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+```
+
+```{r bootstrap, message=FALSE, warning=FALSE, include=FALSE}
+if (!suppressMessages(suppressWarnings(require("rpart", quietly = T)))) {
+  suppressMessages(suppressWarnings(install.packages("rpart", repos = "http://cran.rstudio.com/", quiet = T, dependencies = T)))
+}
+if (!suppressMessages(suppressWarnings(require("rpart.plot", quietly = T)))) {  
+  suppressMessages(suppressWarnings(install.packages("rpart.plot", repos = "http://cran.rstudio.com/", quiet = T, dependencies = T)))
+}
+if (!suppressMessages(suppressWarnings(require("ggplot2", quietly = T)))) {
+  suppressMessages(suppressWarnings(install.packages("ggplot2", repos = "http://cran.rstudio.com/", quiet = T, dependencies = T)))
+}
+if (!suppressMessages(suppressWarnings(require("gridExtra", quietly = T)))) {  
+  suppressMessages(suppressWarnings(install.packages("gridExtra", repos = "http://cran.rstudio.com/", quiet = T, dependencies = T)))
+}
+```
+
+``` {r themes, echo=FALSE, eval=FALSE}
+themes <- "default", "cerulean", "journal", "flatly", "readable", "spacelab", "united", "cosmo", "lumen", "paper", "sandstone", "simplex", "yeti"
+```
+
+---------
+
+# Introducción
+
+El objetivo de la práctica de Data Driven Security es ser capaz de aplicar una metodología de trabajo que nos permita resolver problemas o preguntas relacionadas con la ciberseguridad a través de la correcta exploración, manipulación y visualización de los datos. La estructura de la práctica trata de replicar los pasos de la metodología aprendida durante la parte teórica de la asignatura. 
+
+
+---------
+
+#  Descripción del problema
+
+Actualmente, las empresas tienen cada vez un mayor riesgo de sufrir un ciberataque. El principal motivo es el continuo proceso de digitalización que se está llevando a cabo. Si además sumamos al continuo crecimiento de ciberataques y la continua evolución de estos, se hace completamente necesario la evolución de las técnicas defensivas.
+
+Durante estos últimos años, los Security Information and Event Management (SIEM) comerciales están apostando cada vez más fuerte por la utilización de algoritmos de Machine learning (ML) para la detección de ataques. Cabe destacar que los algoritmos de ML se están utilizando en diferentes áreas de la ciberseguridad **[1](https://www.computerworld.com.au/article/631162/5-top-machine-learning-use-cases-security/)**.
+
+En base a los problemas y necesidades anteriormente expuestos, para la realización de esta práctica, se ha querido desarrollar un modelo que permita una rápida detección de los ataques, incluso de los desconocidos. Este modelo será entrenado mediante ML y deberá ser capaz de distinguir un ataque de una actividad normal en base a ciertos atributos de la actividad de una red. 
+
+```{r r_logo, out.width = "550px"}
+knitr::include_graphics("figures/idsDiagram.png")
+
+```
+
+En la imagen anterior podemos ver un diagrama simplificado sobre el Sistema de Detección de Intrusos que haría uso del modelo desarrollado durante la presente práctica.
+
+
+## La Pregunta
+
+El modelo pretende ser capaz de clasificar datos en base a lo aprendido de datos diferentes. Por tanto, el modelo responderá a una pregunta predictiva.
+
+La pregunta es: ¿Se puede detectar un ataque a elementos de una red en base a la monitorización de ciertos atributos de su actividad?
+ 
+ 
+---------
+
+# Obtención de los datos
+
+Durante la búsqueda de datos que se adecuarán a la pregunta se encontró un dataset relacionado con ataques de red generado por la Universidad de New South Wales (UNSW) Canberra **[2](https://www.unsw.adfa.edu.au/unsw-canberra-cyber/cybersecurity/ADFA-NB15-Datasets/)**.
+
+El dataset fue creado a través de la herramienta IXIA Traffic Generator y se utilizó la herramienta Tcpdump para capturar los datos.
+
+```{r ixia, out.width = "550px"}
+knitr::include_graphics("figures/unsw-nb15-testbed.png")
+```
+
+En la imagen anterior podemos ver la red sobre la que se genero el tráfico.
+
+
+## Explicación del Dataset
+
+```{r r_loadCSV, error=FALSE}
+source("./lab_code.R")
+data_train = loadCSVDataSet("dataset/UNSW_NB15_training-set.csv")
+data_test <- loadCSVDataSet("dataset/UNSW_NB15_testing-set.csv")
+```
+
+El dataset contiene 9 tipos de ataques diferentes. Han sido nombrados como: Fuzzers, Analysis, Backdoors, DoS, Exploits, Generic, Reconnaissance, Shellcode y Worms. También disponemos de muestras clasificadas como Normal. Cada muestra esta compuesta por 49 atributos. Entre los atributos tenemos campos como el protocolo, ip origen, ip destino, bytes enviados por la fuente y el destino durante la transacción, bits por segundo, media del tamaño de los paquetes transmitidos, tiempo entre paquetes SYN y SYN/ACK, puerto origen y destino, timestamp del inicio y del final y ventana TCP entre otros. Una explicación de los atributos se puede encontrar en formato csv através del siguiente **[enlace](https://www.unsw.adfa.edu.au/unsw-canberra-cyber/cybersecurity/ADFA-NB15-Datasets/NUSW-NB15_features.csv)**. Por otra parte, el dataset es de aceso público y esta disponible en formato csv. Para la realización de esta práctica, se dividirá el dataset en dos partes. Por una parte tendremos los **[datos de entrenamiento](https://www.unsw.adfa.edu.au/unsw-canberra-cyber/cybersecurity/ADFA-NB15-Datasets/a%20part%20of%20training%20and%20testing%20set/UNSW_NB15_testing-set.csv)**.
+
+
+## Adecuación del Dataset
+
+Se ha considerado completamente adecuado el dataset para poder responder a nuestra pregunta sobre si es posible detectar ataques en base a la monitorización de ciertos atributos de la actividad de una red.
+
+Los motivos por los que se considera adecuado para su uso es la gran cantidad de datos del que dispone (más de 250.000 muestras) y el tipo de datos que clasifica, ataques de red.
+
+
+---------
+
+# Preparación de los datos
+
+El objetivo de esta fase es poder limpiar/adaptar los datos para posteriormente poder analizarlos, manipularlos y/o visualizarlos.
+
+Para ello se ha procedido a la lectura de los datos en formato csv y creación del data frame.
+
+
+---------
+
+# Modelo
+
+Tal y como se ha explicado en apartados anteriores, se va a utilizar un algoritmo de Machine Learning para desarrollar el modelo.
+
+## Selección del algoritmo
+La decisón sobre que algoritmo utilizar para responder a la pregunta es clave para poder obtener resultados válidos. Es por ello que se ha utilizado el siguiente recurso para tomar la decisión sobre que algoritmo utilizar.
+
+```{r alg, out.width = "550px"}
+knitr::include_graphics("figures/choosingAlg.PNG")
+```
+Basado en el modelo anterior y en las restricciones de tiempo para la realización del proyecto se ha considerado que la manera más rápida a la vez que efectiva para responder a la pregunta es utilizar Decission Trees (DT), en concreto, de clasificación.
+
+Durante las primeras fases de desarrollo del proyecto se hicieron pruebas con dos librerías que implementan DT: ctree y rpart. Dentro del alcance inicial del proyecto estaba poder comparar los resultados obtenidos entre las dos librerías. Sin embargo, debido a restricciones de tiempo, solo se han obtenido resultados con la librería rpart.
+
+
+## Resultados iniciales
+
+Tras la realización de las primeras pruebas, en las que no se ha aplicado ninguna transformación a los datos, se ha obtenido los siguientes resultados.
+
+Como vemos en la siguiente imagen, parte superior derecha, nuestro modelo no es capaz de clasificar las clases Analysis, Backdoor, Dos, Shellcode y Worms.
+
+```{r r_1, error=FALSE}
+r1 <- plotResultsWithMultiClassUnmod(data_train, data_test)
+```
+
+Tras analizar los datos, uno de los motivos por el que no puede clasificar, es las pocas muestras disponibles de ese tipo de ataque. La cantidad de muestras de algunos tipos de ataques (p.e. Exploits) es desproporcionada a la cantidad de muestas de otro tipo de ataques, como es el caso de las que no puede clasificar.
+
+A continuación se muestan los porcentages de acierto por categoria
+
+```{r r_1_1, error=FALSE}
+plotResults(r1[,1:3])
+```
+
+Como se puede apreciar en la tabla anterior, el modelo tiene 0% de precisión con las clases mostradas en la tabla.
+
+```{r r_1_2, error=FALSE}
+plotResults(r1[,4:6])
+```
+
+Con la clase Generic obtenemos unos resultados muy buenos. Sinembargo, podemos observar que al modelo le cuesta diferenciar entre Exploits y Fuzzers respecto a la clase Normal.
+
+```{r r_1_3, error=FALSE}
+plotResults(r1[,7:8])
+```
+
+En la tabla anterior podemos ver como no se llega al 50% de precisión en lo que refiere a la precisión de la clase Normal. La precisión de Reconnaissance es mala.
+
+```{r r_1_4, error=FALSE}
+plotResults(r1[,9:10])
+```
+
+El modelo no es capaz de clasificar Shellcode y Worms.
+
+
+---------
+
+# Mejora de los resultados
+
+Apartir de los datos obtenidos en los resultados anteriores se ha decidido aplicar transformaciones a los datos con el objetivo de mejorar los resultados.
+
+Incialmente se ha seguido un enfoque en el que se ha dividido las muestras entre Attack y Normal obteniendo las siguiente distribución de muestras para el entrenamiento. Se pretende así comprobar si se mejoran los resultados de clasificación entre ataque y no ataque.
+
+```{r r_1_5, error=FALSE}
+r2 <- plotResultsOfUnModDataSet(data_train, data_test)
+```
+
+Una vez entrenado el modelo, volvemos a calcular la precisión con más de 150.000 muestras.
+
+```{r r_1_6, error=FALSE}
+plotBinaryResults(r2)
+```
+
+En el gráfico anterior se puede apreciar, que clasificando de forma binaria mejora la precisión en lo que refiere a la clase Normal, pero sigue siendo incapaz de clasificar la clase Attack.
+
+Dado que el modelo sigue ofreciendo pobres resultados, se ha decidido aplicar más manipulación a los datos en base a los primeros resultados obtenidos. En el arbol de decisiones generado se podia apreciar como ciertos atributos incidian en mayor grado en aprendizaje del algoritmo. Es por ese motivo que apartir de un proceso iterativo se ha hecho una selección de los atributos con los que se obtenía mejores resultos.
+
+Además, también se han eliminado las muestras del tipo Fuzzers, ya que habia pocas de ellas y afectaban en gran medida en la precisión de ataques en lo que refiere a falsos positivos.
+
+Tras aplicar las modificaciones explicadas, han mejorado mucho los resultados. Se ha decidido obviar poner las diferentes gráficas de precisión durante el proceso de selección de atributos. En cualquier caso, a continuación se muestra la precisión utilizando clasificación binaria.
+
+```{r r_1_7}
+r3 <- plotResultsOfModDataSet(data_train, data_test)
+plotBinaryResults(r3)
+```
+
+Tal y como se puede apreciar en la imagen anterior, se ha conseguido aumentar la precisión por encima del 96%.
+
+Para mejorar los resultados, se ha realizado pruebas con diferentes enfoques. Uno de ellos, ha consistido en agrupar las clases en base a las que el modelo solia confundir. Para ello se han agrupado las clase Analysis, Backdoor, DoS, Exploits, Shellcode y Worms en una misma. Y se han mantenido las clases, Generic, Normal y Reconnaissance. La clase Fuzzers ha sido eliminada. Con esta configuración se han obtenido los mejores resultados.
+
+```{r r_1_8}
+r4 <- plotResultsWithMultiClass(data_train, data_test)
+```
+
+A continuación se muestran los resultados de precisión.
+
+```{r r_1_9}
+plotResults(r4)
+```
+
+Se aprecian bueno resultados clasificando las clases de esta manera, además, cabe destacar que el resultado global de precisión en lo que refiere a clasificar entre ataque y no ataque es del 96,69.
+
+---------
+
+
+# Conclusiones
+
+Las conclusiones son realmente positivas. Al iniciar el proyecto, las expectativas de precisión eran mucho menores y más teniendo en cuenta que no se conocía el lenguaje R. Es posible que se deba a la gran cantidad de datos utilizados, a la correcta elección del algoritmo y a la correcta selección de los atributos en base al algoritmo utilizado. 
+
+Por otra parte, pese a que se han obtenido niveles de precisión de casi el 97%, el número de falsos positivos es aproximadamente de un 3%. Este dato podría llegar a suponer un problema si el modelo se utilizase tal y como está en un sistema real. Sin embargo, estos resultados probablemente aun puedan mejorar invirtiendo más tiempo en aplicar nuevas técnicas. También en comparar los resultados con los obtenidos mediante otros algoritmos de Machine Learning.
