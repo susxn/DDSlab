@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 library(kableExtra)
 
-raw.file = "../../../data/qualys/latest.qkdb.xml.zip"
+raw.file = "../../data/qualys/latest.qkdb.xml.zip"
 ```
 
 # Qualys KDB
