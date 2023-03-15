@@ -3,7 +3,15 @@ title: "Analysis of Qualys KDB"
 author: "Pau Susin Alsina"
 date: "`r Sys.Date()`"
 output:
-  html_document: default
+  html_document: 
+    toc: true
+    toc_depth: 5
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    #number_sections: true
+    #toc_cols: 4
+    
   pdf_document: default
 ---
 
@@ -52,10 +60,10 @@ qid1[1:10]
 Cuando la etiqueta no es obligatoria, podemos aplicar el mismo procedimiento anterior, pero vamos a tener dos problemas:
 
 
-1. El vector resultante contendrá los valores de la etiqueta correctamente, pero el índice de ese valor dentro del vector no será el mismo índice que el de la observación. Ejemplo: Tenemos el qid anterior con valor 6 y sabemos que esa observación no tiene valor de CVSS/BASE. Entonces asignaremos el valor de qid 6 con el primer elemento de la lista CVSS/BASE que no será el valor que le pertenece.
+1. El vector resultante contendrá los valores de la etiqueta correctamente, pero el índice de ese valor dentro del vector no será el mismo índice que el de la observación. Ejemplo: Tenemos el qid anterior con valor 6 y sabemos que esa observación no tiene valor CVSS/BASE. Entonces asignaremos el valor de qid 6 con el primer elemento de la lista CVSS/BASE que no será el valor que le pertenece.
 
 
-2. El vector resultante tendrá una longitud menor a un vector resultante de analizar una etiqueta obligatoria, como resultado, un error en la generación del dataset, gráfico, ...
+2. El vector resultante tendrá una longitud menor a un vector resultante de una etiqueta obligatoria, como resultado, un error en la generación del dataset, gráfico, ...
 
 Vamos a verlo:
 
@@ -78,11 +86,62 @@ nodos <- xml2::xml_find_all(doc, "//VULN")
 CVSS_BASE_nodes <- xml_find_first(nodos, "./CVSS/BASE")
 CVSS_BASE <- xml_text(CVSS_BASE_nodes)
 CVSS_BASE[1:10]
+
+
 ```
 
+### Generación del dataset
+
+Ahora ya sabemos como construir vectores para variables no obligatorias, por lo tanto, cuando creamos nuestro dataset no tendremos problemas con las longitudes de los vectores de columna.
+
+```{r read_raw4, echo=TRUE}
+
+doc <- xml2::read_xml(raw.file)
+
+#Columnas obligatorias segun el fichero dtd
+
+qid <- rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/QID"))
+vuln_type <- rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/VULN_TYPE"))
+severity_level <-rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/SEVERITY_LEVEL"))
+title <-rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/TITLE"))
+published_datetime <- rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/PUBLISHED_DATETIME"))
+patchable <-rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/PATCHABLE"))
+discovery <-rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/DISCOVERY")) 
+category <-rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/CATEGORY"))
+
+#Columnas que no siempre contienen valores
+
+nodos <- xml2::xml_find_all(doc, "//VULN")
+
+cvss_base <- xml_text(xml_find_first(nodos, "./CVSS/BASE"))
+cvss_temporal <- xml_text(xml_find_first(nodos, "./CVSS/TEMPORAL"))
+
+#Dataset
+
+kdb <- data.frame(qid = qid,
+                  title = title,
+                  vuln_type = vuln_type,
+                  category = category,
+                  severity = severity_level,
+                  patchable = patchable,
+                  published = published_datetime,
+                  discovery = discovery,
+                  cvss_base = cvss_base,
+                  cvss_temporal = cvss_temporal,
+                  stringsAsFactors = FALSE)
+kdb$published <- as.POSIXct.POSIXlt(strptime(x = kdb$published, format = "%Y-%m-%dT%TZ"))
+
+```
+
+### Tabla
+
+```{r add_table, echo=FALSE}
+kable(head(kdb)) %>% kable_styling()
+
+```
+
+
 ## Including Cybersecurity Standards
-
-
 
 ```{r add_cve, echo=FALSE}
 
