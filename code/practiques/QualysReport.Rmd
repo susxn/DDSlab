@@ -1,41 +1,88 @@
 ---
 title: "Analysis of Qualys KDB"
-author: "Humbert Costas"
+author: "Pau Susin Alsina"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-
+library(xml2)
 library(kableExtra)
+
 
 raw.file = "../../data/qualys/latest.qkdb.xml.zip"
 ```
 
 # Qualys KDB
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam vitae erat dignissim, placerat nisi vitae, viverra ipsum. Etiam consectetur mattis pellentesque. Duis at porttitor eros. Morbi nisl eros, luctus efficitur dui ac, ultricies vulputate leo. Vestibulum accumsan, nunc id faucibus finibus, tellus ipsum venenatis odio, in luctus nisi lectus vel orci. Etiam pretium imperdiet lobortis. Vestibulum ut neque nec erat tempor laoreet et at erat. Nam varius dolor non neque maximus, ut egestas enim ultrices. Integer porttitor, leo id ornare pharetra, tellus erat cursus metus, eget rutrum augue dui at justo.
+Qualys KDB es una base de datos de conocimientos de vulnerabilidades (Vulnerability Knowledge Base, por sus siglas en inglés) desarrollada por la empresa de seguridad informática Qualys. Esta base de datos contiene información sobre miles de vulnerabilidades de seguridad conocidas en sistemas operativos, aplicaciones y dispositivos de red.
 
-```{r read_raw}
+Disponemos de un fichero con extensión XML. Existen varias formas de definir cuál es la estructura de un fichero XML. En este caso, disponemos de un fichero DTD, pero también existen los esquemas XML (XML Schemas), que son una alternativa más potente y versátil para definir la estructura y la validación de documentos XML.
+
+## Qualys Knowledge_Base_Vuln_List_Output 
+
+Un archivo DTD (Document Type Definition, en español, Definición de Tipo de Documento) es un archivo que define la estructura, los elementos y los atributos que se pueden usar en un documento XML.
+
+Los archivos DTD se utilizan para validar la sintaxis de un documento XML y asegurarse de que cumple con las reglas y restricciones específicas definidas en el DTD. Por ejemplo, un archivo DTD puede definir qué elementos son obligatorios o opcionales, qué atributos pueden tener esos elementos y qué valores pueden tener esos atributos.
+
+Podemos ver la estructura del fichero XML descrita en el fichero DTD. Disponemos de un nodo VULN_LIST que contiene todas las observaciones separadas por la etiqueta VULN. Se puede apreciar como dentro de cada elemento VULN existen etiquetas que contienen el nombre que identifica cada campo. Este campo terminará siendo una columna de nuestro dataset. Existen etiquetas que contienen un interrogante al final del nombre. Esto es debido a que cada observación, puede o no contener esea etiqueta. Un ejemplo podria ser el campo CVSS?.
+
+
+### Tratamiento de Etiquetas 
+
+#### Etiqueta Obligatoria
+
+Cuando sabemos que una etiqueta es obligatoria para cada observación, podemos acceder a cada una de ellas simplemente indicando en el xpath donde se encuentra esa etiqueta: 
+
+```{r read_raw1, echo=TRUE}
+
 doc <- xml2::read_xml(raw.file)
+qid = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/QID"))
+qid1 = rvest::html_text(xml2::xml_find_all(doc, xpath = "//VULN/QID"))
+qid[1:10]
+qid1[1:10]
+```
 
-kdb <- data.frame(qid = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/QID")),
-                  title = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/TITLE")),
-                  vuln_type = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/VULN_TYPE")),
-                  category = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/CATEGORY")),
-                  severity = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/SEVERITY_LEVEL")),
-                  patchable = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/PATCHABLE")),
-                  published = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/LAST_SERVICE_MODIFICATION_DATETIME")),
-                  stringsAsFactors = FALSE)
-kdb$published <- as.POSIXct.POSIXlt(strptime(x = kdb$published, format = "%Y-%m-%dT%TZ"))
+#### Etiqueta Opcional
+##### Versión no deseada
 
-kable(head(kdb)) %>% kable_styling()
+Cuando la etiqueta no es obligatoria, podemos aplicar el mismo procedimiento anterior, pero vamos a tener dos problemas:
+
+
+1. El vector resultante contendrá los valores de la etiqueta correctamente, pero el índice de ese valor dentro del vector no será el mismo índice que el de la observación. Ejemplo: Tenemos el qid anterior con valor 6 y sabemos que esa observación no tiene valor de CVSS/BASE. Entonces asignaremos el valor de qid 6 con el primer elemento de la lista CVSS/BASE que no será el valor que le pertenece.
+
+
+2. El vector resultante tendrá una longitud menor a un vector resultante de analizar una etiqueta obligatoria, como resultado, un error en la generación del dataset, gráfico, ...
+
+Vamos a verlo:
+
+```{r read_raw2, echo=TRUE}
+
+doc <- xml2::read_xml(raw.file)
+cvss_base = rvest::html_text(rvest::html_elements(doc, xpath = "//VULN/CVSS/BASE"))
+cvss_base[1:10]
+
+```
+
+##### Versión deseada
+
+El primer paso es centrarse en todos los nodos VULN,por lo tanto, la variable nodos contendrá todas las observaciones de nuestro fichero XML. A continuación, por cada nodo, buscamos la etiqueta CVSS/BASE con el método xml_find_first, si no la encuentra devuelve NA. 
+
+```{r read_raw3, echo=TRUE}
+
+doc <- xml2::read_xml(raw.file)
+nodos <- xml2::xml_find_all(doc, "//VULN")
+CVSS_BASE_nodes <- xml_find_first(nodos, "./CVSS/BASE")
+CVSS_BASE <- xml_text(CVSS_BASE_nodes)
+CVSS_BASE[1:10]
 ```
 
 ## Including Cybersecurity Standards
 
-Aliquam erat volutpat. Proin eget arcu et erat viverra eleifend. Quisque suscipit interdum blandit. Cras suscipit, nibh at mattis varius, purus massa pretium est, a malesuada felis velit sed leo. Nam quis malesuada orci. Aliquam consectetur molestie purus in rutrum. Curabitur purus libero, blandit vitae tempus quis, pharetra sit amet ex. Integer ligula lorem, gravida ac dui rutrum, sodales egestas augue. Etiam bibendum risus elit, quis dictum erat tristique id. Sed vulputate, turpis vel commodo molestie, lacus dui varius velit, vitae maximus tellus neque in urna. Donec non purus elementum, condimentum mi eu, semper dolor. Suspendisse malesuada turpis vel libero blandit varius. Cras rhoncus facilisis nunc sed efficitur. Suspendisse suscipit vel dui ut semper. Donec pellentesque tincidunt tincidunt.
+
 
 ```{r add_cve, echo=FALSE}
 
@@ -54,4 +101,4 @@ Aliquam erat volutpat. Proin eget arcu et erat viverra eleifend. Quisque suscipi
 
 ## Conclusion
 
-Ut finibus, metus in tristique blandit, purus quam vulputate sapien, vitae rhoncus nunc orci et leo. Duis id justo bibendum, molestie nulla eget, ullamcorper massa. Sed porttitor leo tellus, a tristique nisi tincidunt lobortis. Donec in orci imperdiet, lobortis lorem hendrerit, vestibulum dolor. Proin laoreet, orci at iaculis blandit, odio ligula commodo nunc, eu pulvinar justo tortor sed eros. Ut convallis condimentum purus, ac viverra neque maximus ac. Vestibulum consequat facilisis odio vel tempor.
+
