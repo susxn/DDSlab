@@ -20,7 +20,7 @@ output:
 El método que vamos a seguir es ir mirando en la tabla class_dtm (que contiene las 24 palabras que se van a usar para la detección) aquellas palabras que són muy similares que pueden ser lo mismo.
 En este punto lo que se va a realizar es modificar una de las palabras por la otra (considerando que son la misma).
 
-```{r setup, include=false}
+```{r setup, include=FALSE}
 library(dplyr)
 library(tm)
 library(caret)
@@ -55,6 +55,16 @@ kdb_ml <- bind_rows(kdb_critical %>% sample_n(3000),
           sample_n(15000) %>%
           select(descr, critical)
 table(kdb_ml$critical)
+
+```
+
+### Normalización de las muestras
+
+Se ha intentado normalizar todas las palabras que se han encontrado parecidas pero el modelo solo mejora sus resultados con la normalizacion de todos los codigos CVE. Mejora del 1%.
+
+Quizas uno de los metodos que se podria usar seria la implementacion de un modelo K-means para clusterizar el maximo de palabras posibles de forma dinàmica. 
+
+```{r setup, include=FALSE}
 #*******************************************************************
 #                         Classification
 #*******************************************************************
@@ -86,53 +96,53 @@ remplazo_palabras_re <- function(x,expresion_regular, palabra_reemplazar){
   gsub(expresion_regular,palabra_reemplazar,x, perl = TRUE)
 }
 
-
+  
 #Cambiamos Users por user
-course_corpus5 <- tm_map(course_corpus4, content_transformer(remplazo_palabras),palabra_buscar="users",palabra_reemplazar="user")
+#course_corpus5 <- tm_map(course_corpus4, content_transformer(remplazo_palabras),palabra_buscar="users",palabra_reemplazar="user")
 
 
 #Cambiamos vulnerabilities por vulnerability
-course_corpus6 <- tm_map(course_corpus5, content_transformer(remplazo_palabras),palabra_buscar="vulnerabilities",palabra_reemplazar="vulnerability")
+#course_corpus6 <- tm_map(course_corpus5, content_transformer(remplazo_palabras),palabra_buscar="vulnerabilities",palabra_reemplazar="vulnerability")
 
 
 #Cambiamos versions por version
-course_corpus7 <- tm_map(course_corpus6, content_transformer(remplazo_palabras),palabra_buscar="versions",palabra_reemplazar="version")
+#course_corpus7 <- tm_map(course_corpus6, content_transformer(remplazo_palabras),palabra_buscar="versions",palabra_reemplazar="version")
 
 #Cambiamos compromised por compromise
-course_corpus8 <- tm_map(course_corpus7, content_transformer(remplazo_palabras),palabra_buscar="compromised",palabra_reemplazar="compromise")
+#course_corpus8 <- tm_map(course_corpus7, content_transformer(remplazo_palabras),palabra_buscar="compromised",palabra_reemplazar="compromise")
 
 #Cambiamos corrupted por corrupt
-course_corpus9 <- tm_map(course_corpus8, content_transformer(remplazo_palabras),palabra_buscar="corrupted",palabra_reemplazar="corrupt")
+#course_corpus9 <- tm_map(course_corpus8, content_transformer(remplazo_palabras),palabra_buscar="corrupted",palabra_reemplazar="corrupt")
 
 #Cambiamos corruption por corrupt
-course_corpus10 <- tm_map(course_corpus9, content_transformer(remplazo_palabras),palabra_buscar="corruption",palabra_reemplazar="corrupt")
+#course_corpus10 <- tm_map(course_corpus9, content_transformer(remplazo_palabras),palabra_buscar="corruption",palabra_reemplazar="corrupt")
 
 #Aplicamos expresion regular a las palabras "authenticate", "authenticated", "authenticating", "authentication" y las agrupamos a authenticate
-course_corpus11 <- tm_map(course_corpus10, content_transformer(remplazo_palabras_re),expresion_regular="\\bauthentic\\w*\\b",palabra_reemplazar="authenticate")
+#course_corpus11 <- tm_map(course_corpus10, content_transformer(remplazo_palabras_re),expresion_regular="\\bauthentic\\w*\\b",palabra_reemplazar="authenticate")
 
 #Automatically, Automation, Automatic
-course_corpus12 <- tm_map(course_corpus11, content_transformer(remplazo_palabras_re),expresion_regular="\\bautomati\\w*\\b",palabra_reemplazar="automatic")
-
-#No interesa un CVE especifico sino simplemente que esta asociado a un CVE.
-course_corpus13 <- tm_map(course_corpus12, content_transformer(remplazo_palabras_re),expresion_regular="\\bcve\\w*\\b",palabra_reemplazar="cve")
+#course_corpus12 <- tm_map(course_corpus11, content_transformer(remplazo_palabras_re),expresion_regular="\\bautomati\\w*\\b",palabra_reemplazar="automatic")
 
 #Cambiamos systems por system
-course_corpus14 <- tm_map(course_corpus13, content_transformer(remplazo_palabras),palabra_buscar="systems",palabra_reemplazar="system")
+#course_corpus14 <- tm_map(course_corpus13, content_transformer(remplazo_palabras),palabra_buscar="systems",palabra_reemplazar="system")
 
 #Cambiamos issues por issue
-course_corpus15 <- tm_map(course_corpus14, content_transformer(remplazo_palabras),palabra_buscar="issues",palabra_reemplazar="issue")
+#course_corpus15 <- tm_map(course_corpus14, content_transformer(remplazo_palabras),palabra_buscar="issues",palabra_reemplazar="issue")
 
 #Cambiamos fixes por fix
-course_corpus16 <- tm_map(course_corpus15, content_transformer(remplazo_palabras),palabra_buscar="fixes",palabra_reemplazar="fix")
+#course_corpus16 <- tm_map(course_corpus15, content_transformer(remplazo_palabras),palabra_buscar="fixes",palabra_reemplazar="fix")
 
 #Cambiamos files por file
-course_corpus17 <- tm_map(course_corpus16, content_transformer(remplazo_palabras),palabra_buscar="files",palabra_reemplazar="file")
+#course_corpus17 <- tm_map(course_corpus16, content_transformer(remplazo_palabras),palabra_buscar="files",palabra_reemplazar="file")
+
+
 
 #No interesa un CVE especifico sino simplemente que esta asociado a un CVE.
-course_corpus18 <- tm_map(course_corpus17, content_transformer(remplazo_palabras_re),expresion_regular="\\b\\d+cve\\d+\\b",palabra_reemplazar="cve")
+course_corpus5 <- tm_map(course_corpus4, content_transformer(remplazo_palabras_re),expresion_regular="\\bcve\\w*\\b",palabra_reemplazar="cve_id")
+
 
 #Generate TF-IDF matrix
-course_dtm <- DocumentTermMatrix(course_corpus18)
+course_dtm <- DocumentTermMatrix(course_corpus5)
 findFreqTerms(course_dtm,5)
 
 #Remove terms not in 90% of the documents. Only have those that are there
@@ -154,6 +164,7 @@ El objetico de este punto es evaluar el % de muestras criticas a usar a la hora 
 Observando la base de datos de Qualys nos damos cuenta que existen muchas más vulnerabilidades definidas como no críticas que aquellas definidas como críticas. Por lo que seguramente el porcentaje de muestras críticas usadas para el entreno debe ser menor al de no críticas.
 
 Se creará un gráfico que muestre cuál es el mejor porcentaje a usar para obtener una mejor accuracy.
+
 
 
 ##Optimizar los parámetros del modelo
