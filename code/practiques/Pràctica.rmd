@@ -50,9 +50,9 @@ freq_char2
 # Prepare data for training
 kdb_critical <- kdb_txt %>% filter(critical == "YES")
 kdb_other <- kdb_txt %>% filter(critical == "NO")
-kdb_ml <- bind_rows(kdb_critical %>% sample_n(1200),
-                    kdb_other %>% sample_n(3700)) %>%
-          sample_n(4900) %>%
+kdb_ml <- bind_rows(kdb_critical %>% sample_n(3000),
+                    kdb_other %>% sample_n(12000)) %>%
+          sample_n(15000) %>%
           select(descr, critical)
 table(kdb_ml$critical)
 #*******************************************************************
@@ -74,27 +74,69 @@ course_corpus3 <- tm_map(course_corpus2, removePunctuation)
 #Remove stopwords
 course_corpus4 <- tm_map(course_corpus3, removeWords, stopwords())
 #inspect(course_corpus4[[1]])
+
+
 #Creamos una función para reemplazar palabras
 remplazo_palabras <- function(x,palabra_buscar, palabra_reemplazar){
   gsub(palabra_buscar,palabra_reemplazar,x)
 }
+
+#Creamos una función para reemplazar palabras con Expresion Regular
+remplazo_palabras_re <- function(x,expresion_regular, palabra_reemplazar){
+  gsub(expresion_regular,palabra_reemplazar,x, perl = TRUE)
+}
+
+
 #Cambiamos Users por user
 course_corpus5 <- tm_map(course_corpus4, content_transformer(remplazo_palabras),palabra_buscar="users",palabra_reemplazar="user")
+
+
 #Cambiamos vulnerabilities por vulnerability
 course_corpus6 <- tm_map(course_corpus5, content_transformer(remplazo_palabras),palabra_buscar="vulnerabilities",palabra_reemplazar="vulnerability")
+
+
 #Cambiamos versions por version
 course_corpus7 <- tm_map(course_corpus6, content_transformer(remplazo_palabras),palabra_buscar="versions",palabra_reemplazar="version")
+
 #Cambiamos compromised por compromise
 course_corpus8 <- tm_map(course_corpus7, content_transformer(remplazo_palabras),palabra_buscar="compromised",palabra_reemplazar="compromise")
+
 #Cambiamos corrupted por corrupt
 course_corpus9 <- tm_map(course_corpus8, content_transformer(remplazo_palabras),palabra_buscar="corrupted",palabra_reemplazar="corrupt")
+
 #Cambiamos corruption por corrupt
 course_corpus10 <- tm_map(course_corpus9, content_transformer(remplazo_palabras),palabra_buscar="corruption",palabra_reemplazar="corrupt")
+
+#Aplicamos expresion regular a las palabras "authenticate", "authenticated", "authenticating", "authentication" y las agrupamos a authenticate
+course_corpus11 <- tm_map(course_corpus10, content_transformer(remplazo_palabras_re),expresion_regular="\\bauthentic\\w*\\b",palabra_reemplazar="authenticate")
+
+#Automatically, Automation, Automatic
+course_corpus12 <- tm_map(course_corpus11, content_transformer(remplazo_palabras_re),expresion_regular="\\bautomati\\w*\\b",palabra_reemplazar="automatic")
+
+#No interesa un CVE especifico sino simplemente que esta asociado a un CVE.
+course_corpus13 <- tm_map(course_corpus12, content_transformer(remplazo_palabras_re),expresion_regular="\\bcve\\w*\\b",palabra_reemplazar="cve")
+
+#Cambiamos systems por system
+course_corpus14 <- tm_map(course_corpus13, content_transformer(remplazo_palabras),palabra_buscar="systems",palabra_reemplazar="system")
+
+#Cambiamos issues por issue
+course_corpus15 <- tm_map(course_corpus14, content_transformer(remplazo_palabras),palabra_buscar="issues",palabra_reemplazar="issue")
+
+#Cambiamos fixes por fix
+course_corpus16 <- tm_map(course_corpus15, content_transformer(remplazo_palabras),palabra_buscar="fixes",palabra_reemplazar="fix")
+
+#Cambiamos files por file
+course_corpus17 <- tm_map(course_corpus16, content_transformer(remplazo_palabras),palabra_buscar="files",palabra_reemplazar="file")
+
+#No interesa un CVE especifico sino simplemente que esta asociado a un CVE.
+course_corpus18 <- tm_map(course_corpus17, content_transformer(remplazo_palabras_re),expresion_regular="\\b\\d+cve\\d+\\b",palabra_reemplazar="cve")
+
 #Generate TF-IDF matrix
-course_dtm <- DocumentTermMatrix(course_corpus10)
-findFreqTerms(course_dtm,3)
+course_dtm <- DocumentTermMatrix(course_corpus18)
+findFreqTerms(course_dtm,5)
+
 #Remove terms not in 90% of the documents. Only have those that are there
-#in atleast 2 documents
+#in atleast 10% documents
 dense_course_dtm <- removeSparseTerms(course_dtm, .85)
 #Inspect to TF-IDF
 inspect(dense_course_dtm)
