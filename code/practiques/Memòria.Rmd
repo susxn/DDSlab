@@ -1,0 +1,138 @@
+---
+title: "Memoria DDS"
+author: "Pau Susin Alsina & Pau Guàrdia Sabartés"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: true
+    toc_depth: 5
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    #toc_cols: 4
+---
+# Mejora modelo clasificación de vulnerabilidades
+## Text Análisis y modificación del Dataset
+### Obtencion de los datos
+
+La extracion de datos se hace a traves de un fichero XML donde cada observacion esta compuesta por varias columnas de las quales solamente se usaran el Qid ("Identificador de la vulnerabilidad), Severity (nivel de grabedad de la vulnerabilidad) 
+y Diagnosis (Diagnostico asociado a la vulnerabilidad).
+
+En la generación del dataset se crea una columna nueva: 
+
+- Critica: Valor Boleano, classifica la muestra como crítica en caso que la severity sea 5.
+
+
+```{r library, include=FALSE}
+library(dplyr)
+library(tm)
+library(caret)
+library(ggplot2)
+library(kableExtra)
+```
+
+```{r Data, include=FALSE}
+raw.file = "../../data/qualys/latest.qkdb.xml.zip"
+doc <- xml2::read_xml(raw.file)
+kdb_txt <- rvest::html_text(rvest::html_elements(doc, xpath="//VULN[DIAGNOSIS]/*[self::QID or self::SEVERITY_LEVEL or self::DIAGNOSIS]"))
+kdb_txt <- matrix(kdb_txt, nrow = length(kdb_txt)/3, ncol = 3, byrow = TRUE)
+kdb_txt <- as.data.frame.matrix(kdb_txt)
+names(kdb_txt) <- c("qid", "severity", "diagnosis")
+kdb_txt$qid <- as.integer(kdb_txt$qid)
+kdb_txt$severity <- as.integer(kdb_txt$severity)
+kdb_txt$diagnosis <- textclean::replace_html(kdb_txt$diagnosis)
+kdb_txt$critical <- ifelse(test = kdb_txt$severity < 5, yes = "NO", no = "YES")
+kdb_txt$criticalb <- kdb_txt$severity == 5
+kable(head(kdb_txt)) %>% kable_styling()
+```
+
+### Text Analysis
+
+Se realiza el análisas de frecuencia de palabres y caracteres en el dataset. La columna diagnosis sufre un split por palabras y se analiza la frequencia de cada palabra.
+Se destaca la importancia de eliminar las palabras que no tienen mucho valor semantico como pueden ser: un, una, el, la. Seguidamente se realiza el analisis de frequencia pero 
+por caracteres. Obtenemos las palabras y caracteres que pueden ser útiles para el análisis de texto.
+
+```{r Text, include=FALSE}
+
+freq_word <- sort(table(unlist(strsplit(kdb_txt$diagnosis, " "))), decreasing = TRUE)
+kdb_words <- names(freq_word)[(which(!(names(freq_word) %in% stopwords::stopwords())))]
+## Characters
+freq_char <- sort(table(unlist(strsplit(kdb_txt$diagnosis, ""))), decreasing = TRUE)
+
+kdb_txt$descr <- textclean::replace_symbol(kdb_txt$diagnosis)
+freq_char2 <- sort(table(unlist(strsplit(kdb_txt$descr, ""))), decreasing = TRUE)
+
+kdb_critical <- kdb_txt %>% filter(critical == "YES")
+kdb_other <- kdb_txt %>% filter(critical == "NO")
+
+```
+
+### Optimización del texto extraido
+
+```{r Mod, include=FALSE}
+total = 4000
+porcentajes <- c(0.05, 0.1, 0.15, 0.2, 0.25)
+accuracies <- numeric()
+for (x in porcentajes){
+  kdb_ml <- bind_rows(kdb_critical %>% sample_n(x*total),
+                      kdb_other %>% sample_n((1-x)*total)) %>%
+    sample_n(total) %>%
+    select(descr, critical)
+
+  
+  # course_raw = scan("data/Course-Descriptions.txt", what="", sep="\n")
+  course_raw <- kdb_ml$descr
+  course_corpus <- VCorpus(VectorSource(course_raw))
+  inspect(course_corpus[[1]])
+  #Convert to lower case
+  course_corpus2 <- tm_map(course_corpus, content_transformer(tolower))
+  #Remove punctuations
+  course_corpus3 <- tm_map(course_corpus2, removePunctuation)
+  #Remove stopwords
+  course_corpus4 <- tm_map(course_corpus3, removeWords, stopwords())
+  
+  #Creamos una función para reemplazar palabras con Expresion Regular
+  remplazo_palabras_re <- function(x,expresion_regular, palabra_reemplazar){
+    gsub(expresion_regular,palabra_reemplazar,x, perl = TRUE)
+  }
+  
+  #No interesa un CVE especifico sino simplemente que esta asociado a un CVE.
+  course_corpus5 <- tm_map(course_corpus4, content_transformer(remplazo_palabras_re),expresion_regular="\\bcve\\w*\\b",palabra_reemplazar="cve_id")
+  
+  
+  #Generate TF-IDF matrix
+  course_dtm <- DocumentTermMatrix(course_corpus4)
+  
+  findFreqTerms(course_dtm,5)
+  #Remove terms not in 90% of the documents. Only have those that are there
+  #in atleast 2 documents
+  dense_course_dtm <- removeSparseTerms(course_dtm, .85)
+  #Inspect to TF-IDF
+  
+  #Convert continuous values to classes = { Yes, No }
+  conv_counts <- function(x) {
+    x <- ifelse(x > 0, 1, 0)
+    x <- factor(x, levels = c(0, 1), labels = c("No", "Yes"))
+  }
+  class_dtm <- apply(dense_course_dtm, MARGIN = 2, conv_counts)
+}
+
+```
+
+
+## Modificación Muestras
+### Muestras Criticas
+
+
+
+## Analisis Resultados Obtenidos
+### Parametros del modelo obtenidos
+#### P1
+#### Pn
+
+##Conclusiones
+
+
+
+

@@ -11,8 +11,6 @@ output:
       smooth_scroll: true
     number_sections: true
     #toc_cols: 4
-    
-  pdf_document: default
 ---
 
 #Mejora modelo clasificación de vulnerabilidades
@@ -39,6 +37,9 @@ kdb_txt$severity <- as.integer(kdb_txt$severity)
 kdb_txt$diagnosis <- textclean::replace_html(kdb_txt$diagnosis)
 kdb_txt$critical <- ifelse(test = kdb_txt$severity < 5, yes = "NO", no = "YES")
 kdb_txt$criticalb <- kdb_txt$severity == 5
+
+head(kdb_txt)
+
 # Text analysis
 ## Stopwords
 freq_word <- sort(table(unlist(strsplit(kdb_txt$diagnosis, " "))), decreasing = TRUE)
@@ -343,7 +344,3 @@ for (total in totales){
 }
 ```
 
-##Optimizar los parámetros del modelo
-
-##Modificación del modelo (n-gramas)
-En vez de utilizar palabras para la detección, usar la concanetación de palabras.

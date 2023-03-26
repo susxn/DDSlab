@@ -9,11 +9,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Pau Susin Alsina" />
+<meta name="author" content="Pau Susin Alsina &amp; Pau Guàrdia Sabartés" />
 
-<meta name="date" content="2023-03-15" />
+<meta name="date" content="2023-03-26" />
 
-<title>Analysis of Qualys KDB</title>
+<title>Memoria DDS</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1709,377 +1709,70 @@ border-radius: 0px;
 
 
 
-<h1 class="title toc-ignore">Analysis of Qualys KDB</h1>
-<h4 class="author">Pau Susin Alsina</h4>
-<h4 class="date">2023-03-15</h4>
+<h1 class="title toc-ignore">Memoria DDS</h1>
+<h4 class="author">Pau Susin Alsina &amp; Pau Guàrdia Sabartés</h4>
+<h4 class="date">2023-03-26</h4>
 
 </div>
 
 
-<div id="qualys-kdb" class="section level1">
-<h1>Qualys KDB</h1>
-<p>Qualys KDB es una base de datos de conocimientos de vulnerabilidades
-(Vulnerability Knowledge Base, por sus siglas en inglés) desarrollada
-por la empresa de seguridad informática Qualys. Esta base de datos
-contiene información sobre miles de vulnerabilidades de seguridad
-conocidas en sistemas operativos, aplicaciones y dispositivos de
-red.</p>
-<p>Disponemos de un fichero con extensión XML. Existen varias formas de
-definir cuál es la estructura de un fichero XML. En este caso,
-disponemos de un fichero DTD, pero también existen los esquemas XML (XML
-Schemas), que son una alternativa más potente y versátil para definir la
-estructura y la validación de documentos XML.</p>
-<div id="qualys-knowledge_base_vuln_list_output" class="section level2">
-<h2>Qualys Knowledge_Base_Vuln_List_Output</h2>
-<p>Un archivo DTD (Document Type Definition, en español, Definición de
-Tipo de Documento) es un archivo que define la estructura, los elementos
-y los atributos que se pueden usar en un documento XML.</p>
-<p>Los archivos DTD se utilizan para validar la sintaxis de un documento
-XML y asegurarse de que cumple con las reglas y restricciones
-específicas definidas en el DTD. Por ejemplo, un archivo DTD puede
-definir qué elementos son obligatorios o opcionales, qué atributos
-pueden tener esos elementos y qué valores pueden tener esos
-atributos.</p>
-<p>Podemos ver la estructura del fichero XML descrita en el fichero DTD.
-Disponemos de un nodo VULN_LIST que contiene todas las observaciones
-separadas por la etiqueta VULN. Se puede apreciar como dentro de cada
-elemento VULN existen etiquetas que contienen el nombre que identifica
-cada campo. Este campo terminará siendo una columna de nuestro dataset.
-Existen etiquetas que contienen un interrogante al final del nombre.
-Esto es debido a que cada observación, puede o no contener esea
-etiqueta. Un ejemplo podria ser el campo CVSS?.</p>
-<div id="tratamiento-de-etiquetas" class="section level3">
-<h3>Tratamiento de Etiquetas</h3>
-<div id="etiqueta-obligatoria" class="section level4">
-<h4>Etiqueta Obligatoria</h4>
-<p>Cuando sabemos que una etiqueta es obligatoria para cada observación,
-podemos acceder a cada una de ellas simplemente indicando en el xpath
-donde se encuentra esa etiqueta:</p>
-<pre class="r"><code>doc &lt;- xml2::read_xml(raw.file)
-qid = rvest::html_text(rvest::html_elements(doc, xpath = &quot;//VULN/QID&quot;))
-qid1 = rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/QID&quot;))
-qid[1:10]</code></pre>
-<pre><code>##  [1] &quot;6&quot;    &quot;9&quot;    &quot;11&quot;   &quot;32&quot;   &quot;1000&quot; &quot;1001&quot; &quot;1002&quot; &quot;1004&quot; &quot;1005&quot; &quot;1006&quot;</code></pre>
-<pre class="r"><code>qid1[1:10]</code></pre>
-<pre><code>##  [1] &quot;6&quot;    &quot;9&quot;    &quot;11&quot;   &quot;32&quot;   &quot;1000&quot; &quot;1001&quot; &quot;1002&quot; &quot;1004&quot; &quot;1005&quot; &quot;1006&quot;</code></pre>
+<div id="mejora-modelo-clasificación-de-vulnerabilidades" class="section level1" number="1">
+<h1><span class="header-section-number">1</span> Mejora modelo
+clasificación de vulnerabilidades</h1>
+<div id="text-análisis-y-modificación-del-dataset" class="section level2" number="1.1">
+<h2><span class="header-section-number">1.1</span> Text Análisis y
+modificación del Dataset</h2>
+<div id="obtencion-de-los-datos" class="section level3" number="1.1.1">
+<h3><span class="header-section-number">1.1.1</span> Obtencion de los
+datos</h3>
+<p>La extracion de datos se hace a traves de un fichero XML donde cada
+observacion esta compuesta por varias columnas de las quales solamente
+se usaran el Qid (“Identificador de la vulnerabilidad), Severity (nivel
+de grabedad de la vulnerabilidad) y Diagnosis (Diagnostico asociado a la
+vulnerabilidad).</p>
+<p>En la generación del dataset se crea una columna nueva:</p>
+<ul>
+<li>Critica: Valor Boleano, classifica la muestra como crítica en caso
+que la severity sea 5.</li>
+</ul>
 </div>
-<div id="etiqueta-opcional" class="section level4">
-<h4>Etiqueta Opcional</h4>
-<div id="versión-no-deseada" class="section level5">
-<h5>Versión no deseada</h5>
-<p>Cuando la etiqueta no es obligatoria, podemos aplicar el mismo
-procedimiento anterior, pero vamos a tener dos problemas:</p>
-<ol style="list-style-type: decimal">
-<li><p>El vector resultante contendrá los valores de la etiqueta
-correctamente, pero el índice de ese valor dentro del vector no será el
-mismo índice que el de la observación. Ejemplo: Tenemos el qid anterior
-con valor 6 y sabemos que esa observación no tiene valor CVSS/BASE.
-Entonces asignaremos el valor de qid 6 con el primer elemento de la
-lista CVSS/BASE que no será el valor que le pertenece.</p></li>
-<li><p>El vector resultante tendrá una longitud menor a un vector
-resultante de una etiqueta obligatoria, como resultado, un error en la
-generación del dataset, gráfico, …</p></li>
-</ol>
-<p>Vamos a verlo:</p>
-<pre class="r"><code>doc &lt;- xml2::read_xml(raw.file)
-cvss_base = rvest::html_text(rvest::html_elements(doc, xpath = &quot;//VULN/CVSS/BASE&quot;))
-cvss_base[1:10]</code></pre>
-<pre><code>##  [1] &quot;5&quot;  &quot;0&quot;  &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot;</code></pre>
+<div id="text-analysis" class="section level3" number="1.1.2">
+<h3><span class="header-section-number">1.1.2</span> Text Analysis</h3>
+<p>Se realiza el análisas de frecuencia de palabres y caracteres en el
+dataset. La columna diagnosis sufre un split por palabras y se analiza
+la frequencia de cada palabra. Se destaca la importancia de eliminar las
+palabras que no tienen mucho valor semantico como pueden ser: un, una,
+el, la. Seguidamente se realiza el analisis de frequencia pero por
+caracteres. Obtenemos las palabras y caracteres que pueden ser útiles
+para el análisis de texto.</p>
 </div>
-<div id="versión-deseada" class="section level5">
-<h5>Versión deseada</h5>
-<p>El primer paso es centrarse en todos los nodos VULN,por lo tanto, la
-variable nodos contendrá todas las observaciones de nuestro fichero XML.
-A continuación, por cada nodo, buscamos la etiqueta CVSS/BASE con el
-método xml_find_first, si no la encuentra devuelve NA.</p>
-<pre class="r"><code>doc &lt;- xml2::read_xml(raw.file)
-nodos &lt;- xml2::xml_find_all(doc, &quot;//VULN&quot;)
-CVSS_BASE_nodes &lt;- xml_find_first(nodos, &quot;./CVSS/BASE&quot;)
-CVSS_BASE &lt;- xml_text(CVSS_BASE_nodes)
-CVSS_BASE[1:10]</code></pre>
-<pre><code>##  [1] NA   NA   &quot;5&quot;  NA   &quot;0&quot;  &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot; &quot;10&quot;</code></pre>
+<div id="optimización-del-texto-extraido" class="section level3" number="1.1.3">
+<h3><span class="header-section-number">1.1.3</span> Optimización del
+texto extraido</h3>
 </div>
 </div>
-</div>
-<div id="generación-del-dataset" class="section level3">
-<h3>Generación del dataset</h3>
-<p>Ahora ya sabemos como construir vectores para variables no
-obligatorias, por lo tanto, cuando creamos nuestro dataset no tendremos
-problemas con las longitudes de los vectores de columna.</p>
-<pre class="r"><code>doc &lt;- xml2::read_xml(raw.file)
-
-#Columnas obligatorias segun el fichero dtd
-
-qid &lt;- rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/QID&quot;))
-vuln_type &lt;- rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/VULN_TYPE&quot;))
-severity_level &lt;-rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/SEVERITY_LEVEL&quot;))
-title &lt;-rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/TITLE&quot;))
-published_datetime &lt;- rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/PUBLISHED_DATETIME&quot;))
-patchable &lt;-rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/PATCHABLE&quot;))
-discovery &lt;-rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/DISCOVERY&quot;)) 
-category &lt;-rvest::html_text(xml2::xml_find_all(doc, xpath = &quot;//VULN/CATEGORY&quot;))
-
-#Columnas que no siempre contienen valores
-
-nodos &lt;- xml2::xml_find_all(doc, &quot;//VULN&quot;)
-
-cvss_base &lt;- xml_text(xml_find_first(nodos, &quot;./CVSS/BASE&quot;))
-cvss_temporal &lt;- xml_text(xml_find_first(nodos, &quot;./CVSS/TEMPORAL&quot;))
-
-#Dataset
-
-kdb &lt;- data.frame(qid = qid,
-                  title = title,
-                  vuln_type = vuln_type,
-                  category = category,
-                  severity = severity_level,
-                  patchable = patchable,
-                  published = published_datetime,
-                  discovery = discovery,
-                  cvss_base = cvss_base,
-                  cvss_temporal = cvss_temporal,
-                  stringsAsFactors = FALSE)
-kdb$published &lt;- as.POSIXct.POSIXlt(strptime(x = kdb$published, format = &quot;%Y-%m-%dT%TZ&quot;))</code></pre>
-</div>
-<div id="tabla" class="section level3">
-<h3>Tabla</h3>
-<table class="table" style="margin-left: auto; margin-right: auto;">
-<thead>
-<tr>
-<th style="text-align:left;">
-qid
-</th>
-<th style="text-align:left;">
-title
-</th>
-<th style="text-align:left;">
-vuln_type
-</th>
-<th style="text-align:left;">
-category
-</th>
-<th style="text-align:left;">
-severity
-</th>
-<th style="text-align:left;">
-patchable
-</th>
-<th style="text-align:left;">
-published
-</th>
-<th style="text-align:left;">
-discovery
-</th>
-<th style="text-align:left;">
-cvss_base
-</th>
-<th style="text-align:left;">
-cvss_temporal
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-6
-</td>
-<td style="text-align:left;">
-DNS Host Name
-</td>
-<td style="text-align:left;">
-Information Gathered
-</td>
-<td style="text-align:left;">
-Information gathering
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-1999-01-01 08:00:00
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-9
-</td>
-<td style="text-align:left;">
-Open RPC Services List
-</td>
-<td style="text-align:left;">
-Information Gathered
-</td>
-<td style="text-align:left;">
-RPC
-</td>
-<td style="text-align:left;">
-2
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-1999-01-01 08:00:00
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-11
-</td>
-<td style="text-align:left;">
-Hidden RPC Services
-</td>
-<td style="text-align:left;">
-Vulnerability
-</td>
-<td style="text-align:left;">
-RPC
-</td>
-<td style="text-align:left;">
-2
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-1999-01-01 08:00:00
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-5
-</td>
-<td style="text-align:left;">
-3.6
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-32
-</td>
-<td style="text-align:left;">
-Darxite Banner
-</td>
-<td style="text-align:left;">
-Information Gathered
-</td>
-<td style="text-align:left;">
-General remote services
-</td>
-<td style="text-align:left;">
-2
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-2000-11-22 18:29:32
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-NA
-</td>
-<td style="text-align:left;">
-NA
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1000
-</td>
-<td style="text-align:left;">
-Potential UDP Backdoor
-</td>
-<td style="text-align:left;">
-Potential Vulnerability
-</td>
-<td style="text-align:left;">
-Backdoors and trojan horses
-</td>
-<td style="text-align:left;">
-4
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-1999-01-01 08:00:00
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-0
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1001
-</td>
-<td style="text-align:left;">
-“Back Orifice” Backdoor
-</td>
-<td style="text-align:left;">
-Vulnerability
-</td>
-<td style="text-align:left;">
-Backdoors and trojan horses
-</td>
-<td style="text-align:left;">
-5
-</td>
-<td style="text-align:left;">
-0
-</td>
-<td style="text-align:left;">
-1999-01-01 08:00:00
-</td>
-<td style="text-align:left;">
-1
-</td>
-<td style="text-align:left;">
-10
-</td>
-<td style="text-align:left;">
-9
-</td>
-</tr>
-</tbody>
-</table>
+<div id="modificación-muestras" class="section level2" number="1.2">
+<h2><span class="header-section-number">1.2</span> Modificación
+Muestras</h2>
+<div id="muestras-criticas" class="section level3" number="1.2.1">
+<h3><span class="header-section-number">1.2.1</span> Muestras
+Criticas</h3>
 </div>
 </div>
-<div id="including-cybersecurity-standards" class="section level2">
-<h2>Including Cybersecurity Standards</h2>
+<div id="analisis-resultados-obtenidos" class="section level2" number="1.3">
+<h2><span class="header-section-number">1.3</span> Analisis Resultados
+Obtenidos</h2>
+<div id="parametros-del-modelo-obtenidos" class="section level3" number="1.3.1">
+<h3><span class="header-section-number">1.3.1</span> Parametros del
+modelo obtenidos</h3>
+<div id="p1" class="section level4" number="1.3.1.1">
+<h4><span class="header-section-number">1.3.1.1</span> P1</h4>
 </div>
-<div id="conclusion" class="section level2">
-<h2>Conclusion</h2>
+<div id="pn" class="section level4" number="1.3.1.2">
+<h4><span class="header-section-number">1.3.1.2</span> Pn</h4>
+<p>##Conclusiones</p>
+</div>
+</div>
 </div>
 </div>
 
