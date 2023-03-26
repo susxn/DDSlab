@@ -1,6 +1,7 @@
 library(dplyr)
 library(tm)
 library(caret)
+library(ggplot2)
 
 # Read XML document
 raw.file = "../../data/qualys/latest.qkdb.xml.zip"
@@ -34,9 +35,11 @@ freq_char2
 kdb_critical <- kdb_txt %>% filter(critical == "YES")
 kdb_other <- kdb_txt %>% filter(critical == "NO")
 
-total <- 4000
-porcentajes <- c(0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5)
+total <- 2000
+porcentajes <- c(0.05, 0.1, 0.15, 0.20, 0.25)
 accuracies <- numeric()
+sensitivities <- numeric()
+Pos_Pred_Values <- numeric()
 
 for (x in porcentajes){
  
@@ -116,12 +119,29 @@ for (x in porcentajes){
   #-------------------------------------------------------------------
   #Predict for the test data
   course_predictions <- predict(course_model,test_dtm)
-  #Analyze prediction accuracy
-  confusionMatrix(table(course_predictions , test_classes))
+  
+  # Guardar la salida de la función confusionMatrix() en una variable
+  cm <- confusionMatrix(table(course_predictions, test_classes))
+  
+  # Extraer los valores de la matriz de confusión
+  # Guardar la salida de la función confusionMatrix() en una variable
+  
+  
   #-------------------------------------------------------------------
-  accuracies <- c(accuracies, confusionMatrix(table(course_predictions , test_classes))$overall["Accuracy"])
+  accuracies <- c(accuracies, cm$overall["Accuracy"])
+  sensitivities <- c(sensitivities, cm$byClass["Sensitivity"])
+  Pos_Pred_Values <- c(Pos_Pred_Values, cm$byClass["Pos Pred Value"])
 }
 
-plot(porcentajes, accuracies, col = "blue", type="o")
-lines(porcentajes,accuracies)
-title("Evaluación Accuracy vs Porcentaje muestras criticas")
+# Crea un dataframe con los datos
+df <- data.frame(porcentajes = porcentajes, y1 = accuracies, y2=sensitivities, y3=Pos_Pred_Values)
+
+# Crea el gráfico con ggplot2
+ggplot(df, aes(x = porcentajes, y1 = y1, y2 = y2, y3= y3)) +
+  geom_line(aes(y = y1, col = "Accuracies")) +
+  geom_line(aes(y = y2, col = "Sensitivities")) +
+  geom_line(aes(y = y3, col = "% True Positive")) +
+  scale_color_manual(values = c("blue", "red", "green"), name = "Legend") +
+  labs(title = paste("Evaluación Accuracy/Sensitivity/True Positive,  vs Porcentaje muestras criticas. N=", total))
+name <- paste("plots3variables/myplot", total, ".png", sep = "")
+ggsave(name, width = 7, height = 5, dpi = 300)
